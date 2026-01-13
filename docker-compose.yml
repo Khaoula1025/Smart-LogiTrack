@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres-silver
+    environment:
+      POSTGRES_USER: silver_user
+      POSTGRES_PASSWORD: silver_pass123
+      POSTGRES_DB: silver_data
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    command: 
+      - "postgres"
+      - "-c"
+      - "shared_buffers=512MB"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "work_mem=32MB"
+
+volumes:
+  postgres_data:
+    driver: local
