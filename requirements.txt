@@ -1,3 +1,7 @@
 pyspark
 matplotlib
 seaborn
+joblib
+fastapi 
+uvicorn 
+pyspark
