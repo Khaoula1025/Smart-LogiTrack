@@ -61,7 +61,6 @@ def predict_eta(
         # Prédiction
         result = model.transform(df)  # ← Utilise model importé
         duration = float(result.select("prediction").first()[0])
-        print('############duration##########',duration)
         # Logger dans PostgreSQL
         timestamp = datetime.now()
         log_query = text("""
