@@ -1,7 +1,25 @@
+# machine learning 
 pyspark
+# visualisation 
 matplotlib
 seaborn
-joblib
+#backend 
 fastapi 
 uvicorn 
-pyspark
+pydantic
+PyJWT 
+pydantic[email]
+# Environment
+python-dotenv
+dotenv
+# Database 
+
+# Database
+sqlalchemy
+psycopg2-binary
+
+# Authentication
+python-jose
+passlib[bcrypt]
+bcrypt==3.2.2
+httpx
