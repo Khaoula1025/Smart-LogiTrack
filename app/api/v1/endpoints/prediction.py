@@ -40,7 +40,7 @@ def predict_eta(
     db: Session = Depends(get_db)
 ):
     # Vérifier que le modèle est chargé
-    if model is None:  # ← Utilise la variable importée
+    if model is None: 
         raise HTTPException(status_code=503, detail="Modèle non disponible")
     
     try:
@@ -56,8 +56,7 @@ def predict_eta(
             features.pickup_hour
         )]
         
-        df = spark.createDataFrame(data, FEATURES)  # ← Utilise spark et FEATURES importés
-        
+        df = spark.createDataFrame(data, FEATURES)  
         # Prédiction
         result = model.transform(df)  # ← Utilise model importé
         duration = float(result.select("prediction").first()[0])
@@ -94,7 +93,7 @@ VALUES (
             "dur": round(duration, 2),
             "h": features.pickup_hour,
             "pred": duration,
-            "v": MODEL_VERSION,  # ← Utilise MODEL_VERSION importé
+            "v": MODEL_VERSION,
             "ts": timestamp,
             "u": user.id
         })
@@ -102,7 +101,7 @@ VALUES (
         
         return PredictionResponse(
             estimated_duration=round(duration, 2),
-            model_version=MODEL_VERSION,  # ← Utilise MODEL_VERSION importé
+            model_version=MODEL_VERSION,
             timestamp=timestamp.isoformat()
         )
         

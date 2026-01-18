@@ -12,8 +12,8 @@ pydantic[email]
 # Environment
 python-dotenv
 dotenv
-# Database 
-
+# testing
+pytest
 # Database
 sqlalchemy
 psycopg2-binary

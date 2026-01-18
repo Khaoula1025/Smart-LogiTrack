@@ -32,17 +32,14 @@ def get_spark():
         .getOrCreate()
 
 def process_data(**context):
-    """Process bronze data and save to silver database"""
     spark = get_spark()
     try:
         # Load data from bronze
-        print(f"📂 Loading data from {BRONZE_PATH}")
         df = spark.read.parquet(BRONZE_PATH)
         rows_before = df.count()
-        print(f"✅ Loaded {rows_before:,} rows")
+        print(f"before {rows_before:,} rows")
         
         # Create target column: trip_duration in minutes
-        print("🎯 Creating trip_duration target column...")
         df_silver = df.withColumn(
             'trip_duration',
             spark_round(
@@ -51,9 +48,7 @@ def process_data(**context):
                 2
             )
         )
-        
         # Data cleaning with filters
-        print("🧹 Cleaning data with filters...")
         df_silver = df_silver.filter(
             (col("trip_duration") > 1) &
             (col("trip_duration") < 120) &
@@ -64,9 +59,7 @@ def process_data(**context):
             (col("total_amount") > 0) &
             (col("total_amount") < 500)
         )
-        
         # Remove outliers using IQR method on trip_duration
-        print("📊 Removing outliers using IQR method...")
         duration_stats = df_silver.approxQuantile('trip_duration', [0.25, 0.75], 0.01)
         Q1, Q3 = duration_stats[0], duration_stats[1]
         IQR = Q3 - Q1
@@ -77,13 +70,11 @@ def process_data(**context):
             (col('trip_duration') >= lower_bound) &
             (col('trip_duration') <= upper_bound)
         )
-        # Feature engineering: Extract time-based features
-        print("⚙️ Engineering time-based features...")
+        # Extract time-based features
         df_silver = df_silver.withColumn("pickup_hour", hour(col("tpep_pickup_datetime"))) \
                              .withColumn("pickup_day_of_week", dayofweek(col("tpep_pickup_datetime"))) \
                              .withColumn("pickup_day", dayofmonth(col("tpep_pickup_datetime"))) \
                              .withColumn("pickup_month", month(col("tpep_pickup_datetime")))
-        
         # Time of day categories
         df_silver = df_silver.withColumn(
             "time_of_day",
@@ -92,13 +83,11 @@ def process_data(**context):
             .when((col("pickup_hour") >= 17) & (col("pickup_hour") < 21), "Evening")
             .otherwise("Night")
         )
-        
         # Weekend flag
         df_silver = df_silver.withColumn(
             "is_weekend",
             when(col("pickup_day_of_week").isin([1, 7]), 1).otherwise(0)
         )
-        
         # Rush hour flag
         df_silver = df_silver.withColumn(
             "is_rush_hour",
@@ -108,11 +97,8 @@ def process_data(**context):
                 1
             ).otherwise(0)
         )
-        
         # Optimize partitions for writing
-        print("🔄 Optimizing partitions for database write...")
         df_silver_optimized = df_silver.repartition(20)
-        
         # Write to PostgreSQL
         print("💾 Writing to PostgreSQL (silver_table)...")
         df_silver_optimized.write \
@@ -125,7 +111,6 @@ def process_data(**context):
             .option("batchsize", "100000") \
             .mode("overwrite") \
             .save()
-        
         # Verify
         df_verify = spark.read.format("jdbc") \
             .option("url", JDBC_URL) \
@@ -133,18 +118,15 @@ def process_data(**context):
             .option("user", DB_USER) \
             .option("password", DB_PASSWORD) \
             .load()
-        
-        print(f"✅ Successfully saved {df_verify.count():,} rows to PostgreSQL")
+        print(f"Successfully saved {df_verify.count():,} rows to PostgreSQL")
         
     finally:
         spark.stop()
 
 def train_model(**context):
-    """Train ML models on silver data"""
     spark = get_spark()
     try:
         # Load data from silver database
-        print("📂 Loading data from silver_table...")
         df = spark.read.format("jdbc") \
             .option("url", JDBC_URL) \
             .option("dbtable", "silver_table") \
@@ -152,30 +134,22 @@ def train_model(**context):
             .option("password", DB_PASSWORD) \
             .load()
         
-        print(f"✅ Loaded {df.count():,} rows from silver database")
-        
+        print(f"Loaded {df.count():,} rows from silver database")
         # Drop columns not needed for training
         columns_to_drop = [
             'VendorID', 'store_and_fwd_flag', 'total_amount', 'extra', 'mta_tax',
             'congestion_surcharge', 'improvement_surcharge', 'is_rush_hour',
             'time_of_day', 'payment_type', 'pickup_day', 'pickup_day_of_week',
             'PULocationID', 'DOLocationID', 'pickup_month', 'is_weekend',
-            'tpep_pickup_datetime', 'tpep_dropoff_datetime'
+            'tpep_pickup_datetime', 'tpep_dropoff_datetime','cbd_congestion_fee'
         ]
-        
         # Filter out columns that exist
         columns_to_drop = [c for c in columns_to_drop if c in df.columns]
         df = df.drop(*columns_to_drop)
-        
-        # Add cbd_congestion_fee to drop list if it exists
-        if 'cbd_congestion_fee' in df.columns:
-            df = df.drop('cbd_congestion_fee')
-        
-        print(f"📋 Remaining columns: {df.columns}")
-        
+
+        print(f"Columns: {df.columns}")
         # Filter null values in target
         df = df.filter(col("trip_duration").isNotNull())
-        
         # Configuration
         numerical_features = [
             'passenger_count', 'trip_distance', 'fare_amount',
@@ -186,12 +160,6 @@ def train_model(**context):
         
         categorical_features = ['RatecodeID'] if 'RatecodeID' in df.columns else []
         target_column = 'trip_duration'
-        
-        print(f"\n🎯 FEATURE CONFIGURATION:")
-        print(f"   Numerical: {len(numerical_features)} features - {numerical_features}")
-        print(f"   Categorical: {len(categorical_features)} features - {categorical_features}")
-        print(f"   Target: {target_column}")
-        
         # Train/test split
         train_df, test_df = df.randomSplit([0.8, 0.2], seed=42)
         train_df = train_df.cache()
@@ -281,9 +249,6 @@ def train_model(**context):
                 standardization=False
             )
         }
-        
-        print(f"\n🤖 Training {len(models)} models...")
-        
         # Train and evaluate models
         results = {}
         best_rmse = float('inf')
@@ -292,7 +257,7 @@ def train_model(**context):
         
         for model_name, model in models.items():
             print(f"\n{'='*70}")
-            print(f"🚀 TRAINING: {model_name}")
+            print(f"TRAINING: {model_name}")
             print(f"{'='*70}")
             
             # Create pipeline
@@ -328,7 +293,7 @@ def train_model(**context):
             mae = evaluator_mae.evaluate(predictions)
             r2 = evaluator_r2.evaluate(predictions)
             
-            print(f"\n📈 METRICS:")
+            print(f"METRICS:")
             print(f"   RMSE: {rmse:.2f} minutes")
             print(f"   MAE:  {mae:.2f} minutes")
             print(f"   R²:   {r2:.4f}")
@@ -346,25 +311,13 @@ def train_model(**context):
                 best_rmse = rmse
                 best_model_name = model_name
                 best_model = trained_model
-        
-        # Print comparison
-        print(f"\n{'='*70}")
-        print("📊 MODEL COMPARISON")
-        print(f"{'='*70}")
-        for name, metrics in sorted(results.items(), key=lambda x: x[1]['rmse']):
-            print(f"\n{name}:")
-            print(f"   RMSE: {metrics['rmse']:.2f} min")
-            print(f"   MAE:  {metrics['mae']:.2f} min")
-            print(f"   R²:   {metrics['r2']:.4f}")
-            print(f"   Time: {metrics['training_time']:.2f}s")
-        
-        print(f"\n🏆 BEST MODEL: {best_model_name} (RMSE: {best_rmse:.2f} min)")
+        print(f"\n BEST MODEL: {best_model_name} (RMSE: {best_rmse:.2f} min)")
         
         # Save best model
         Path(MODEL_PATH).mkdir(parents=True, exist_ok=True)
         model_save_path = f"{MODEL_PATH}/{best_model_name}_model"
         best_model.write().overwrite().save(model_save_path)
-        print(f"✅ Model saved to {model_save_path}")
+        print(f"Model saved to {model_save_path}")
         
     finally:
         spark.stop()
